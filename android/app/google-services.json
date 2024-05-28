@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "769172428228",
+    "project_id": "mynotes-sakib-flutter",
+    "storage_bucket": "mynotes-sakib-flutter.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:769172428228:android:d40915f5c442a36c41c091",
+        "android_client_info": {
+          "package_name": "com.lazysakib.mynotes"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAVTmN9Del78p0WI2x2w57mlErdeRv56_I"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
