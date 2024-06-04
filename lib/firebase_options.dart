@@ -59,4 +59,5 @@ class DefaultFirebaseOptions {
     projectId: 'mynotes-sakib-flutter',
     storageBucket: 'mynotes-sakib-flutter.appspot.com',
   );
+
 }
