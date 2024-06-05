@@ -1,6 +1,6 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:mynotes/constant/routes.dart';
+import 'package:mynotes/services/auth/auth_service.dart';
 
 class VarifyEmailView extends StatefulWidget {
   const VarifyEmailView({super.key});
@@ -11,7 +11,7 @@ class VarifyEmailView extends StatefulWidget {
 
 class _VarifyEmailViewState extends State<VarifyEmailView> {
   Future _signOut() async {
-    await FirebaseAuth.instance.signOut();
+    await AuthService.firebase().logout();
     if (!mounted) return;
     Navigator.of(context).pushNamed(loginRoute);
   }
