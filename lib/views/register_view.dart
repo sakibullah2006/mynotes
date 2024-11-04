@@ -12,12 +12,14 @@ class RegisterView extends StatefulWidget {
 }
 
 class _RegisterViewState extends State<RegisterView> {
+  late final TextEditingController _name;
   late final TextEditingController _email;
   late final TextEditingController _password;
   late final TextEditingController _confirmPassword;
 
   @override
   void initState() {
+    _name = TextEditingController();
     _email = TextEditingController();
     _password = TextEditingController();
     _confirmPassword = TextEditingController();
@@ -25,6 +27,7 @@ class _RegisterViewState extends State<RegisterView> {
   }
 
   Future _signup() async {
+    final name = _name.text;
     final email = _email.text;
     final password = _password.text;
     final confirmPassword = _confirmPassword.text;
@@ -32,7 +35,7 @@ class _RegisterViewState extends State<RegisterView> {
     try {
       if (password == confirmPassword) {
         await AuthService.firebase()
-            .createUser(email: email, password: password);
+            .createUser(name: name, email: email, password: password);
         AuthService.firebase().sendEmailVerification();
         if (!mounted) return;
         Navigator.of(context).pushNamedAndRemoveUntil(
@@ -89,6 +92,26 @@ class _RegisterViewState extends State<RegisterView> {
                 const Text(
                   "Enter your info below to Sign up",
                   style: TextStyle(fontSize: 20),
+                ),
+                // name field
+                const SizedBox(height: 20),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 25.0),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.grey[200],
+                      border: Border.all(color: Colors.white),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: TextField(
+                      controller: _name,
+                      decoration: const InputDecoration(
+                        contentPadding: EdgeInsets.symmetric(horizontal: 8.0),
+                        border: InputBorder.none,
+                        hintText: 'Name',
+                      ),
+                    ),
+                  ),
                 ),
                 // email field
                 const SizedBox(height: 20),

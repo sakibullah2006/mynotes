@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:mynotes/constant/routes.dart';
 import 'package:mynotes/services/auth/auth_service.dart';
+import 'package:intl/intl.dart';
 
 class NotesView extends StatefulWidget {
   const NotesView({super.key});
@@ -11,6 +12,10 @@ class NotesView extends StatefulWidget {
 
 class _NotesViewState extends State<NotesView> {
   final List list = [1, 2, 3, 4, 5, 6, 69];
+
+  String formatDate(DateTime date) {
+    return DateFormat('dd-MM-yyyy HH:mm').format(date);
+  }
 
   Future logout() async {
     await AuthService.firebase().logout();

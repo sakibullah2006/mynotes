@@ -1,5 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart'
-    show FirebaseAuth, FirebaseAuthException;
+    show FirebaseAuth, FirebaseAuthException, UserCredential;
 import 'package:firebase_core/firebase_core.dart';
 import 'package:mynotes/firebase_options.dart';
 import 'package:mynotes/services/auth/auth_exceptions.dart';
@@ -9,12 +9,19 @@ import 'package:mynotes/services/auth/auth_provider.dart';
 class FirebaseAuthProvider implements AuthProvider {
   @override
   Future<AuthUser> createUser({
+    required String name,
     required String email,
     required String password,
   }) async {
     try {
-      await FirebaseAuth.instance
+      // create user
+      UserCredential userCredential = await FirebaseAuth.instance
           .createUserWithEmailAndPassword(email: email, password: password);
+
+      // Set the display name
+      await userCredential.user!.updateDisplayName(name);
+      await userCredential.user!.reload();
+
       final user = currentUser;
       if (user != null) {
         return user;

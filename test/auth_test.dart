@@ -3,7 +3,6 @@ import 'package:mynotes/services/auth/auth_exceptions.dart';
 import 'package:mynotes/services/auth/auth_provider.dart';
 import 'package:mynotes/services/auth/auth_user.dart';
 
-
 void main() {
   group("Authentication Tests", () {
     final provider = MockAuthProvider();
@@ -18,6 +17,7 @@ void main() {
 
     test("Create user with valid credentials should succeed", () async {
       final user = await provider.createUser(
+        name: 'sakib',
         email: 'valid@email.com',
         password: 'validpassword',
       );
@@ -42,7 +42,8 @@ void main() {
     });
 
     test("Logout should set currentUser to null", () async {
-      await provider.createUser(email: 'test@email.com', password: 'password');
+      await provider.createUser(
+          name: 'sakib', email: 'test@email.com', password: 'password');
       await provider.logout();
       expect(provider.currentUser, isNull);
     });
@@ -62,7 +63,8 @@ void main() {
 
     test("Create user with existing email should throw", () {
       expect(
-        () => provider.createUser(email: 'admin', password: 'newpassword'),
+        () => provider.createUser(
+            name: 'sakib', email: 'admin', password: 'newpassword'),
         throwsA(isA<EmailAlreadyInUseAuthException>()),
       );
     });
@@ -81,6 +83,7 @@ class MockAuthProvider implements AuthProvider {
 
   @override
   Future<AuthUser> createUser({
+    required String name,
     required String email,
     required String password,
   }) async {
