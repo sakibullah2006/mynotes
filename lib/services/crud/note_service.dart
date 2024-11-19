@@ -2,32 +2,65 @@ import 'dart:async';
 import 'dart:developer';
 import 'package:flutter/foundation.dart' show immutable;
 import 'package:mynotes/services/crud/db_exceptions.dart';
+import 'package:mynotes/utilities/extensions/filter.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart' show join;
 import 'package:path_provider/path_provider.dart';
 
 class NotesService {
   Database? _db;
+  DatabaseUser? _user;
   List<DatabaseNote> _note = [];
 
-  final StreamController<List<DatabaseNote>> _noteStreamController =
-      StreamController<List<DatabaseNote>>.broadcast();
+  NotesService._sharedInstance() {
+    _notesStreamController = StreamController<List<DatabaseNote>>.broadcast(
+      onListen: () {
+        _notesStreamController.sink.add(_note);
+      },
+    );
+  }
+
+  static final NotesService _instance = NotesService._sharedInstance();
+
+  factory NotesService() => _instance;
+
+  late final StreamController<List<DatabaseNote>> _notesStreamController;
+
+  Stream<List<DatabaseNote>> get allNotes =>
+      _notesStreamController.stream.filter((note) {
+        final currentUser = _user;
+        if (currentUser != null) {
+          log("user, ${currentUser.name} , note, ${note.title}  is in cache");
+          return note.userId == currentUser.id;
+        } else {
+          log("User is not set, cannot read notes. Set a user first.");
+          throw UserShouldBeSetBeforeReadingAllNotes();
+        }
+      });
 
   Future<void> _cacheNotes() async {
     final notes = await getAllNotes();
-    _note = notes.toList();
-    _noteStreamController.add(_note);
+    _instance._note = notes.toList();
+    _instance._notesStreamController.add(_note);
   }
 
   Future<DatabaseUser> getOrCreateUser({
     required String name,
     required String email,
+    bool setAsCurrentUser = true,
   }) async {
     try {
-      final user = getUser(email: email);
+      final user = await getUser(email: email);
+      if (setAsCurrentUser) {
+        _user = user;
+      }
       return user;
     } on CouldNotFindUser {
-      return createUser(name: name, email: email);
+      final createdUser = await createUser(name: name, email: email);
+      if (setAsCurrentUser) {
+        _user = createdUser;
+      }
+      return createdUser;
     } catch (e) {
       rethrow;
     }
@@ -70,7 +103,7 @@ class NotesService {
   Future<DatabaseNote> createNote({
     required DatabaseUser owner,
     required String title,
-    required String text,
+    required String description,
   }) async {
     await _ensureDBIsOpen();
     final db = _getDatabaseOrThrow();
@@ -85,22 +118,24 @@ class NotesService {
     final noteId = await db.insert(noteTable, {
       userIdColumn: owner.id,
       titleColumn: title.trim(),
-      textColumn: text.trim(),
-      timeColumn: DateTime.now().toUtc().toString(),
+      descriptionColumn: description.trim(),
+      timeColumn: DateTime.now().toString(),
       isSyncedColumn: 1
     });
 
     final note = DatabaseNote(
-        id: noteId,
-        userId: owner.id,
-        title: title,
-        text: text,
-        isSyncedWithCloud: true,
-        timestamp: DateTime.now());
+      id: noteId,
+      userId: owner.id,
+      title: title,
+      description: description,
+      isSyncedWithCloud: true,
+      timestamp: DateTime.now().toString(),
+    );
 
-    _note.add(note);
-    _noteStreamController.add(_note);
+    _instance._note.add(note);
+    _instance._notesStreamController.add(_instance._note);
 
+    log("note created");
     return note;
   }
 
@@ -129,7 +164,8 @@ class NotesService {
 
   Future<DatabaseNote> updateNote({
     required DatabaseNote note,
-    required String text,
+    required String description,
+    required String title,
   }) async {
     await _ensureDBIsOpen();
     final db = _getDatabaseOrThrow();
@@ -139,7 +175,8 @@ class NotesService {
     final updateCount = await db.update(
       noteTable,
       {
-        textColumn: text,
+        titleColumn: title,
+        descriptionColumn: description,
         isSyncedColumn: 0,
       },
       where: 'id = ?',
@@ -149,9 +186,11 @@ class NotesService {
       throw CouldNotUpdateNote();
     } else {
       final updatedNote = await getNote(id: note.id);
-      _note.removeWhere((note) => note.id == updatedNote.id);
-      _note.add(updatedNote);
-      _noteStreamController.add(_note);
+      _instance._note.removeWhere((note) => note.id == updatedNote.id);
+      _instance._note.add(updatedNote);
+      _instance._notesStreamController.add(_instance._note);
+
+      log("note updated");
       return updatedNote;
     }
   }
@@ -167,8 +206,8 @@ class NotesService {
     if (deletecount == 0) {
       throw CouldNotDeleteNote();
     } else {
-      _note.removeWhere((note) => note.id == id);
-      _noteStreamController.add(_note);
+      _instance._note.removeWhere((note) => note.id == id);
+      _instance._notesStreamController.add(_instance._note);
     }
   }
 
@@ -193,8 +232,8 @@ class NotesService {
     if (deleteCount == 0) {
       throw CouldNotDeleteNotes();
     } else {
-      _note = [];
-      _noteStreamController.add(_note);
+      _instance._note = [];
+      _instance._notesStreamController.add(_instance._note);
     }
   }
 
@@ -235,8 +274,8 @@ class NotesService {
       throw CouldNotFindNote();
     } else {
       final note = DatabaseNote.fromRow(notes.first);
-      _note.removeWhere((note) => note.id == id);
-      _note.add(note);
+      _instance._note.removeWhere((note) => note.id == id);
+      _instance._note.add(note);
       return note;
     }
   }
@@ -259,7 +298,7 @@ class NotesService {
   }
 
   Database _getDatabaseOrThrow() {
-    final db = _db;
+    final db = _instance._db;
     if (db == null) {
       throw DataBaseIsNotOpen();
     } else {
@@ -276,20 +315,24 @@ class NotesService {
   }
 
   Future<void> open() async {
-    if (_db != null) {
+    if (_instance._db != null) {
       throw DataBaseAlreadyOpened();
     }
     try {
       final docsPath = await getApplicationDocumentsDirectory();
       final path = join(docsPath.path, dbName);
+      log("log: Database Path: $path");
       // open database
-      final db = await openDatabase(path);
+      final db =
+          await openDatabase(path, version: 1, onCreate: (db, version) async {
+        // create user table
+        await db.execute(createUserTable);
+        // create note table
+        await db.execute(createNoteTable);
+      });
+      _instance._db = db;
+      log(db.isOpen ? 'log: Database Opened' : 'log: Database Failed to Open');
 
-      _db = db;
-      // create user table
-      db.execute(createUsertable);
-      // create note table
-      db.execute(createNotetable);
       await _cacheNotes();
     } on MissingPlatformDirectoryException {
       throw CouldNotOpenDocumentDirectory();
@@ -297,12 +340,12 @@ class NotesService {
   }
 
   Future<void> close() async {
-    final db = _db;
+    final db = _instance._db;
 
     if (db == null) {
       throw DataBaseIsNotOpen();
     } else {
-      db.close();
+      await db.close();
       _db = null;
     }
   }
@@ -317,7 +360,7 @@ class DatabaseUser {
   const DatabaseUser({
     required this.id,
     required this.email,
-    this.name,
+    required this.name,
   });
 
   DatabaseUser.fromRow(Map<String, Object?> map)
@@ -339,15 +382,15 @@ class DatabaseNote {
   final int id;
   final int userId;
   final String title;
-  final String text;
-  final DateTime timestamp;
+  final String description;
+  final String timestamp;
   final bool isSyncedWithCloud;
 
   const DatabaseNote({
     required this.id,
     required this.userId,
     required this.title,
-    required this.text,
+    required this.description,
     required this.timestamp,
     required this.isSyncedWithCloud,
   });
@@ -356,13 +399,13 @@ class DatabaseNote {
       : id = map[idColumn] as int,
         userId = map[userIdColumn] as int,
         title = map[titleColumn] as String,
-        text = map[textColumn] as String,
-        timestamp = DateTime.parse(map[timeColumn] as String),
+        description = map[descriptionColumn] as String,
+        timestamp = map[timeColumn] as String,
         isSyncedWithCloud = (map[isSyncedColumn] as int) == 1 ? true : false;
 
   @override
   String toString() =>
-      "id: $id, userId: $userId \n title: $title \n text: $text";
+      "id: $id, userId: $userId \n title: $title \n text: $description";
 
   @override
   bool operator ==(covariant DatabaseNote other) => id == other.id;
@@ -378,24 +421,41 @@ const idColumn = 'id';
 const emailColumn = 'email';
 const nameColumn = 'name';
 const userIdColumn = 'user_id';
-const textColumn = 'text';
+const descriptionColumn = 'description';
 const timeColumn = 'time_stamp';
 const titleColumn = 'title';
 const isSyncedColumn = 'is_synced_with_cloud';
 
-const createUsertable = '''CREATE TABLE IF NOT EXISTS "user" (
-    "id"	INTEGER NOT NULL UNIQUE,
-    "email"	TEXT NOT NULL UNIQUE,
-    "name"	TEXT,
-    PRIMARY KEY("id" AUTOINCREMENT)
-  );''';
-
-const createNotetable = '''CREATE TABLE IF NOT EXISTS "note" (
-	"id"	INTEGER NOT NULL,
-	"user_id"	INTEGER NOT NULL,
-	"title"	TEXT NOT NULL,
-	"text"	INTEGER NOT NULL,
-	"is_synced_with_cloud"	INTEGER DEFAULT 0,
-	FOREIGN KEY("user_id") REFERENCES "user"("id"),
-	PRIMARY KEY("id" AUTOINCREMENT)
+const createUserTable = '''CREATE TABLE IF NOT EXISTS "user" (
+    "id" INTEGER PRIMARY KEY AUTOINCREMENT,
+    "email" TEXT NOT NULL UNIQUE,
+    "name" TEXT
 );''';
+
+const createNoteTable = '''CREATE TABLE IF NOT EXISTS "note" (
+    "id" INTEGER PRIMARY KEY AUTOINCREMENT,
+    "user_id" INTEGER NOT NULL,
+    "title" TEXT,
+    "description" TEXT,
+    "time_stamp" TEXT,
+    "is_synced_with_cloud" INTEGER DEFAULT 0,
+    FOREIGN KEY("user_id") REFERENCES "user"("id")
+);''';
+
+// const createUsertable = '''CREATE TABLE IF NOT EXISTS "user" (
+//     "id"	INTEGER NOT NULL UNIQUE,
+//     "email"	TEXT NOT NULL UNIQUE,
+//     "name"	TEXT,
+//     PRIMARY KEY("id" AUTOINCREMENT)
+//   );''';
+
+// const createNotetable = '''CREATE TABLE IF NOT EXISTS "note" (
+// 	"id"	INTEGER NOT NULL,
+// 	"user_id"	INTEGER NOT NULL,
+// 	"title"	TEXT,
+// 	"description"	TEXT,
+//   "time_stamp"	TEXT,
+// 	"is_synced_with_cloud"	INTEGER DEFAULT 0,
+// 	FOREIGN KEY("user_id") REFERENCES "user"("id"),
+// 	PRIMARY KEY("id" AUTOINCREMENT)
+// );''';

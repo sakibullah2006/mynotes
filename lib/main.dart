@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:mynotes/constant/routes.dart';
 import 'package:mynotes/services/auth/auth_service.dart';
 import 'package:mynotes/views/login_view.dart';
-import 'package:mynotes/views/notes_view.dart';
+import 'package:mynotes/views/notes/create_or_update_note.dart';
+import 'package:mynotes/views/notes/notes_view.dart';
 import 'package:mynotes/views/register_view.dart';
 import 'package:mynotes/views/varify_email.dart';
 
@@ -17,6 +18,7 @@ void main() {
       registerRoute: (context) => const RegisterView(),
       varifyEmailRoute: (context) => const VarifyEmailView(),
       notesRoute: (context) => const NotesView(),
+      createOrUpdateNoteRoute: (context) => const CreateOrUpdateNote(),
     },
     home: HomePage(),
   ));
@@ -31,6 +33,7 @@ class HomePage extends StatelessWidget {
       future: AuthService.firebase().initialize(),
       builder: (context, snapshot) {
         switch (snapshot.connectionState) {
+          case ConnectionState.waiting:
           case ConnectionState.done:
             final user = AuthService.firebase().currentUser;
             if (user != null) {
